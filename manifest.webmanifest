@@ -1,0 +1,10 @@
+{
+  "name": "Marine Compass",
+  "short_name": "Compass",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#071a2d",
+  "theme_color": "#071a2d",
+  "orientation": "portrait-primary",
+  "icons": []
+}
