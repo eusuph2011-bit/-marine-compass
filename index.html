@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#06121c">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Marine Compass</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;background:#06121c;color:#eaf6ff;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",Arial,sans-serif;height:100%;overflow:hidden}
+body{display:flex;justify-content:center}.app{width:100%;max-width:600px;height:100%;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;height:58px}.title{font-size:18px;font-weight:700;letter-spacing:.08em}.status{font-size:11px;color:#8da8b9}
+.readout{text-align:center;margin-top:2px}.hdg{font-size:48px;line-height:1;font-weight:700;letter-spacing:.04em}.dir{font-size:15px;color:#8da8b9;margin-top:4px}
+.compass{position:relative;width:min(92vw,500px);aspect-ratio:1;margin:8px auto 5px;border-radius:50%;background:radial-gradient(circle,#102a3a 0 57%,#071822 58% 100%);border:2px solid #4c7185;box-shadow:0 0 0 7px #091923,0 0 0 9px #345566;overflow:hidden}
+.ring{position:absolute;inset:5%;border:1px solid #6e8c9b;border-radius:50%;transition:transform .18s linear}
+.ticks{position:absolute;inset:0;transition:transform .18s linear}
+.tick{position:absolute;left:50%;top:3%;height:7%;width:2px;background:#b9ced8;transform-origin:50% 710%}.tick.minor{height:4%;width:1px;opacity:.65}
+.labels{position:absolute;inset:10%;transition:transform .18s linear}.labels b{position:absolute;left:50%;top:0;transform:translateX(-50%);font-size:22px}.labels .e{right:0;left:auto;top:50%;transform:translateY(-50%)}.labels .s{left:50%;top:auto;bottom:0;transform:translateX(-50%)}.labels .w{left:0;top:50%;transform:translateY(-50%)}
+.ship{position:absolute;left:50%;top:50%;width:0;height:0;z-index:4}.ship:before{content:"";position:absolute;left:-4px;top:-47%;width:8px;height:94%;background:#f5fbff;border-radius:5px}.ship:after{content:"";position:absolute;left:-7px;top:-48%;border-left:7px solid transparent;border-right:7px solid transparent;border-top:16px solid #f5fbff}
+.marker{position:absolute;left:50%;top:5%;width:0;height:45%;transform-origin:50% 100%;z-index:3}.marker:after{content:"";position:absolute;left:-7px;top:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid #ffd84d}.waypoint{background:#ffd84d}
+.wind{background:#54d6ff}.current{background:#a78bfa}
+.data{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:4px auto;width:min(92vw,500px)}.box{background:#0b202d;border:1px solid #284553;border-radius:10px;padding:7px 10px}.lab{font-size:10px;color:#7f9aaa;letter-spacing:.12em}.val{font-size:18px;font-weight:650;margin-top:2px}
+.controls{display:flex;gap:8px;margin:7px auto;width:min(92vw,500px)}button,input{border:1px solid #345766;background:#0b202d;color:#eaf6ff;border-radius:10px;padding:11px;font-size:14px}button{font-weight:650;flex:1}input{width:100%}.settings{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:auto;width:min(92vw,500px)}.small{font-size:11px}.foot{text-align:center;color:#607b89;font-size:10px;padding:5px}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div class="title">MARINE NAV</div><div id="status" class="status">READY</div></header>
+<div class="readout"><div id="hdg" class="hdg">000°</div><div id="dir" class="dir">N • MAGNETIC</div></div>
+<div class="compass">
+  <div id="ring" class="ring"></div><div id="ticks" class="ticks"></div>
+  <div id="labels" class="labels"><b>N</b><b class="e">E</b><b class="s">S</b><b class="w">W</b></div>
+  <div id="wp" class="marker waypoint" style="display:none"></div>
+  <div id="ship" class="ship"></div>
+</div>
+<div class="data">
+ <div class="box"><div class="lab">SOG</div><div id="sog" class="val">-- kn</div></div>
+ <div class="box"><div class="lab">COG</div><div id="cog" class="val">--°</div></div>
+ <div class="box"><div class="lab">POSITION</div><div id="pos" class="val">--</div></div>
+ <div class="box"><div class="lab">WAYPOINT</div><div id="wpread" class="val">--</div></div>
+</div>
+<div class="controls"><button id="start">ENABLE COMPASS + GPS</button><button id="cal">CALIBRATE</button></div>
+<div class="settings">
+ <input id="lat" inputmode="decimal" placeholder="Waypoint latitude">
+ <input id="lon" inputmode="decimal" placeholder="Waypoint longitude">
+</div>
+<div class="foot">Rotate your iPhone slowly during calibration. GPS and motion permissions are required.</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+for(let i=0;i<36;i++){let t=document.createElement('i');t.className='tick '+(i%3?'minor':'');t.style.transform=`rotate(${i*10}deg)`;$('ticks').appendChild(t)}
+let heading=0, gpsHeading=null, lastPos=null, started=false;
+const norm=x=>(x%360+360)%360;
+const cardinal=x=>['N','NE','E','SE','S','SW','W','NW'][Math.round(norm(x)/45)%8];
+function setHeading(h,source='MAGNETIC'){heading=norm(h);$('hdg').textContent=Math.round(heading).toString().padStart(3,'0')+'°';$('dir').textContent=cardinal(heading)+' • '+source;
+ $('ring').style.transform=`rotate(${-heading}deg)`;$('ticks').style.transform=`rotate(${-heading}deg)`;$('labels').style.transform=`rotate(${-heading}deg)`}
+function bearing(a,b,c,d){const r=Math.PI/180,y1=a*r,y2=c*r,dy=(d-b)*r;return norm(Math.atan2(Math.sin(dy)*Math.cos(y2),Math.cos(y1)*Math.sin(y2)-Math.sin(y1)*Math.cos(y2)*Math.cos(dy))/r)}
+function distance(a,b,c,d){const R=6371000,r=Math.PI/180,x=(c-a)*r,y=(d-b)*r;const q=Math.sin(x/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(y/2)**2;return R*2*Math.atan2(Math.sqrt(q),Math.sqrt(1-q))}
+function updateWP(){let a=parseFloat($('lat').value),b=parseFloat($('lon').value);if(!lastPos||!isFinite(a)||!isFinite(b)){ $('wp').style.display='none';$('wpread').textContent='--';return}
+let br=bearing(lastPos.lat,lastPos.lon,a,b),d=distance(lastPos.lat,lastPos.lon,a,b);$('wp').style.display='block';$('wp').style.transform=`rotate(${norm(br-heading)}deg)`;$('wpread').textContent=`${Math.round(br)}° / ${d<1000?Math.round(d)+' m':(d/1852).toFixed(2)+' NM'}`}
+$('lat').oninput=updateWP;$('lon').oninput=updateWP;
+function gps(p){let c=p.coords,lat=c.latitude,lon=c.longitude;$('pos').textContent=lat.toFixed(5)+' '+lon.toFixed(5);if(c.speed!=null&&c.speed>=0)$('sog').textContent=(c.speed*1.943844).toFixed(1)+' kn';if(c.heading!=null&&!isNaN(c.heading)){gpsHeading=c.heading;$('cog').textContent=Math.round(c.heading)+'°'}lastPos={lat,lon};updateWP()}
+function fail(e){$('status').textContent='GPS ERROR'}
+async function start(){
+ if(started)return;started=true;$('status').textContent='REQUESTING…';
+ try{if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){let p=await DeviceOrientationEvent.requestPermission();if(p!=='granted')throw Error('motion denied')}
+ window.addEventListener('deviceorientationabsolute',motion,true);window.addEventListener('deviceorientation',motion,true);
+ navigator.geolocation.watchPosition(gps,fail,{enableHighAccuracy:true,maximumAge:1000,timeout:15000});
+ $('status').textContent='LIVE'
+ }catch(e){$('status').textContent='PERMISSION NEEDED'}
+}
+function motion(e){let h=null;if(typeof e.webkitCompassHeading==='number')h=e.webkitCompassHeading;else if(e.absolute&&typeof e.alpha==='number')h=360-e.alpha;if(h!=null)setHeading(h,'MAGNETIC')}
+$('start').onclick=start;$('cal').onclick=()=>{setHeading(0);$('status').textContent='CALIBRATE: SLOW ROTATION'};
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body></html>
